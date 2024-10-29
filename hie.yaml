@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:exception-utils"
+
+    - path: "./test/unit"
+      component: "exception-utils:test:unit"

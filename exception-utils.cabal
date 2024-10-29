@@ -1,0 +1,74 @@
+cabal-version:   2.4
+name:            exception-utils
+version:         0.1
+license:         MIT
+license-file:    LICENSE
+tested-with:     GHC ==9.2.8 || ==9.4.8 || ==9.6.6 || ==9.8.3 || ==9.10.1
+copyright:       2024 Thomas Bidne
+author:          Thomas Bidne
+maintainer:      tbidne@protonmail.com
+homepage:        https://github.com/tbidne/exception-utils/
+bug-reports:     https://github.com/tbidne/exception-utils/issues
+synopsis:        FileSystem utils
+description:     This library contains utilities for the file-system.
+category:        FileSystem
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
+source-repository head
+  type:     git
+  location: https://github.com/tbidne/exception-utils
+
+common common-lang
+  default-extensions:
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    GADTs
+    ImportQualifiedPost
+    LambdaCase
+    OverloadedStrings
+    RankNTypes
+    ScopedTypeVariables
+    TypeApplications
+
+  if impl(ghc >=9.8.1)
+    default-extensions: TypeAbstractions
+
+  default-language:   Haskell2010
+
+library
+  import:          common-lang
+  exposed-modules:
+    Control.Exception.Annotation.Utils
+    Control.Exception.Utils
+
+  build-depends:
+    , base        >=4.16.0.0 && <4.21
+    , deepseq     >=1.4.4.0  && <1.6
+    , exceptions  ^>=0.10.4
+    , text        >=1.2.4.0  && <2.2
+
+  hs-source-dirs:  src
+
+test-suite unit
+  import:         common-lang
+  type:           exitcode-stdio-1.0
+  main-is:        Main.hs
+  other-modules:
+    TestUtils
+    Unit.Control.Exception.Annotation.Utils
+    Unit.Control.Exception.Utils
+
+  build-depends:
+    , base
+    , exception-utils
+    , exceptions
+    , tasty            >=1.1.0.3 && <1.6
+    , tasty-hunit      >=0.9     && <0.11
+    , text             >=1.2.4.0 && <2.2
+    , transformers     >=0.5.6.2 && <0.7
+
+  hs-source-dirs: test/unit
+  ghc-options:    -threaded -with-rtsopts=-N
