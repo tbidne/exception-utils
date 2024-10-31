@@ -8,9 +8,6 @@ module Control.Exception.Annotation.Utils
     setUncaughtExceptionDisplay,
     setUncaughtExceptionDisplayInnerMatch,
 
-    -- * Annotations
-    -- $annotations
-
     -- ** Utils
     ExceptionProxy (..),
     displayInner,
@@ -29,14 +26,14 @@ import Data.Typeable (cast)
 import GHC.Conc (setUncaughtExceptionHandler)
 import System.Exit (ExitCode (ExitFailure, ExitSuccess))
 
--- | Proxy for exception types. Used for matching multiple exception types
+-- | Proxy for exception types. Used for matching multiple exception types.
 --
 -- @since 0.1
 data ExceptionProxy = forall e. (Exception e) => MkExceptionProxy (Proxy e)
 
--- | Calls 'displayException' on SomeExceptions' _inner_ exception i.e. given
--- @SomeException e@ calls @displayException e@. This means we will not use
--- 'SomeException''s default annotation printing.
+-- | Calls 'displayException' on 'Control.Exception.SomeException's _inner_
+-- exception i.e. given @SomeException e@ calls @displayException e@. This
+-- means we will not use SomeException's default annotation printing.
 --
 -- @since 0.1
 displayInner :: forall e. (Exception e) => e -> String
@@ -51,10 +48,10 @@ displayInner = walkSomeEx . toException
 -- exception types. If successful, we call 'displayException' on the result.
 -- Otherwise calls 'displayException' on the original parameter.
 --
--- This can be useful when we do no want to use 'SomeException''s
--- @displayException@ when e.g. we do not want to print annotations by default.
--- For instance, we can use the following to ensure we do not print callstacks
--- for specific @Ex1@ and @Ex2@:
+-- This can be useful when we do no want to use
+-- 'Control.Exception.SomeException's @displayException@ when e.g. we do not
+-- want to print annotations by default. For instance, we can use the following
+-- to ensure we do not print callstacks for specific @Ex1@ and @Ex2@:
 --
 -- @
 -- data Ex1 = ... deriving anyclass Exception

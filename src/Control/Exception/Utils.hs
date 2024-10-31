@@ -298,7 +298,8 @@ exitWith code@(ExitFailure n)
         )
 {-# INLINEABLE exitWith #-}
 
--- | Returns 'True' iff the exception is not a subtype of 'SomeAsyncException'.
+-- | Returns 'True' iff the exception is not a subtype of
+-- 'Control.Exception.SomeAsyncException'.
 --
 -- @since 0.1
 isSyncException :: forall e. (Exception e) => e -> Bool
