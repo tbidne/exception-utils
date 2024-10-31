@@ -1,0 +1,227 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# OPTIONS_GHC -Wno-redundant-constraints #-}</span><span>
+</span><span id="line-2"></span><span>
+</span><span id="line-3"></span><span class="hs-comment">-- | Provides utilities for working with GHC's native Exception annotations.</span><span>
+</span><span id="line-4"></span><span class="hs-comment">--</span><span>
+</span><span id="line-5"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-6"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control.Exception.Annotation.Utils</span><span>
+</span><span id="line-7"></span><span>  </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-comment">-- * Global mechanisms</span></span><span>
+</span><span id="line-8"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplay"><span class="hs-identifier">setUncaughtExceptionDisplay</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-9"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplayInnerMatch"><span class="hs-identifier">setUncaughtExceptionDisplayInnerMatch</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-10"></span><span>
+</span><span id="line-11"></span><span>    </span><span class="annot"><span class="hs-comment">-- ** Utils</span></span><span>
+</span><span id="line-12"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier">ExceptionProxy</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInner"><span class="hs-identifier">displayInner</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInnerMatch"><span class="hs-identifier">displayInnerMatch</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInnerMatchHandler"><span class="hs-identifier">displayInnerMatchHandler</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>  </span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">where</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Catch</span></span><span>
+</span><span id="line-20"></span><span>  </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier">Exception</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">displayException</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">fromException</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toException</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><span class="hs-identifier">SomeException</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">SomeException</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-22"></span><span>  </span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Maybe</span></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Proxy</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Proxy</span></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Typeable</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">cast</span></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Conc</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">setUncaughtExceptionHandler</span></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">System.Exit</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ExitCode</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ExitFailure</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">ExitSuccess</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span class="hs-comment">-- | Proxy for exception types. Used for matching multiple exception types.</span><span>
+</span><span id="line-30"></span><span class="hs-comment">--</span><span>
+</span><span id="line-31"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-32"></span><span class="hs-keyword">data</span><span> </span><span id="ExceptionProxy"><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-var">ExceptionProxy</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679062072"><span class="annot"><a href="#local-6989586621679062072"><span class="hs-identifier hs-type">e</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Exception</span></span><span> </span><span class="annot"><a href="#local-6989586621679062072"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span id="MkExceptionProxy"><span class="annot"><a href="Control.Exception.Annotation.Utils.html#MkExceptionProxy"><span class="hs-identifier hs-var">MkExceptionProxy</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Proxy</span></span><span> </span><span class="annot"><a href="#local-6989586621679062072"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-33"></span><span>
+</span><span id="line-34"></span><span class="hs-comment">-- | Calls 'displayException' on 'Control.Exception.SomeException's _inner_</span><span>
+</span><span id="line-35"></span><span class="hs-comment">-- exception i.e. given @SomeException e@ calls @displayException e@. This</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- means we will not use SomeException's default annotation printing.</span><span>
+</span><span id="line-37"></span><span class="hs-comment">--</span><span>
+</span><span id="line-38"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-39"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInner"><span class="hs-identifier hs-type">displayInner</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679062028"><span class="annot"><a href="#local-6989586621679062028"><span class="hs-identifier hs-type">e</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Exception</span></span><span> </span><span class="annot"><a href="#local-6989586621679062028"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679062028"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-40"></span><span id="displayInner"><span class="annot"><span class="annottext">displayInner :: forall e. Exception e =&gt; e -&gt; String
+</span><a href="Control.Exception.Annotation.Utils.html#displayInner"><span class="hs-identifier hs-var hs-var">displayInner</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; String
+</span><a href="#local-6989586621679062076"><span class="hs-identifier hs-var">walkSomeEx</span></a></span><span> </span><span class="annot"><span class="annottext">(SomeException -&gt; String) -&gt; (e -&gt; SomeException) -&gt; e -&gt; String
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; SomeException
+forall e. Exception e =&gt; e -&gt; SomeException
+</span><span class="hs-identifier hs-var">toException</span></span><span>
+</span><span id="line-41"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-42"></span><span>    </span><span class="annot"><a href="#local-6989586621679062076"><span class="hs-identifier hs-type">walkSomeEx</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-43"></span><span>    </span><span id="local-6989586621679062076"><span class="annot"><span class="annottext">walkSomeEx :: SomeException -&gt; String
+</span><a href="#local-6989586621679062076"><span class="hs-identifier hs-var hs-var">walkSomeEx</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span id="local-6989586621679062084"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062084"><span class="hs-identifier hs-var">innerEx1</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">e -&gt; Maybe SomeException
+forall a b. (Typeable a, Typeable b) =&gt; a -&gt; Maybe b
+</span><span class="hs-identifier hs-var">cast</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062084"><span class="hs-identifier hs-var">innerEx1</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-44"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679062085"><span class="annot"><span class="annottext">innerSomeEx :: SomeException
+</span><a href="#local-6989586621679062085"><span class="hs-identifier hs-var">innerSomeEx</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; String
+</span><a href="#local-6989586621679062076"><span class="hs-identifier hs-var">walkSomeEx</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062085"><span class="hs-identifier hs-var">innerSomeEx</span></a></span><span>
+</span><span id="line-45"></span><span>      </span><span class="annot"><span class="annottext">Maybe SomeException
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">e -&gt; String
+forall e. Exception e =&gt; e -&gt; String
+</span><span class="hs-identifier hs-var">displayException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062084"><span class="hs-identifier hs-var">innerEx1</span></a></span><span>
+</span><span id="line-46"></span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- | @displayInnerMatch proxies e@ attempts to convert @e@ to one of the given</span><span>
+</span><span id="line-48"></span><span class="hs-comment">-- exception types. If successful, we call 'displayException' on the result.</span><span>
+</span><span id="line-49"></span><span class="hs-comment">-- Otherwise calls 'displayException' on the original parameter.</span><span>
+</span><span id="line-50"></span><span class="hs-comment">--</span><span>
+</span><span id="line-51"></span><span class="hs-comment">-- This can be useful when we do no want to use</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- 'Control.Exception.SomeException's @displayException@ when e.g. we do not</span><span>
+</span><span id="line-53"></span><span class="hs-comment">-- want to print annotations by default. For instance, we can use the following</span><span>
+</span><span id="line-54"></span><span class="hs-comment">-- to ensure we do not print callstacks for specific @Ex1@ and @Ex2@:</span><span>
+</span><span id="line-55"></span><span class="hs-comment">--</span><span>
+</span><span id="line-56"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-57"></span><span class="hs-comment">-- data Ex1 = ... deriving anyclass Exception</span><span>
+</span><span id="line-58"></span><span class="hs-comment">-- data Ex2 = ... deriving anyclass Exception</span><span>
+</span><span id="line-59"></span><span class="hs-comment">--</span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- let  displayEx' :: SomeException -&gt; String</span><span>
+</span><span id="line-61"></span><span class="hs-comment">--      displayEx' =</span><span>
+</span><span id="line-62"></span><span class="hs-comment">--        displayInnerMatch</span><span>
+</span><span id="line-63"></span><span class="hs-comment">--          [ MkExceptionProxy (Proxy \@Ex1),</span><span>
+</span><span id="line-64"></span><span class="hs-comment">--            MkExceptionProxy (Proxy \@Ex2)</span><span>
+</span><span id="line-65"></span><span class="hs-comment">--          ]</span><span>
+</span><span id="line-66"></span><span class="hs-comment">--</span><span>
+</span><span id="line-67"></span><span class="hs-comment">-- -- in main</span><span>
+</span><span id="line-68"></span><span class="hs-comment">-- setUncaughtExceptionHandler displayEx'</span><span>
+</span><span id="line-69"></span><span class="hs-comment">-- @</span><span>
+</span><span id="line-70"></span><span class="hs-comment">--</span><span>
+</span><span id="line-71"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-72"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInnerMatch"><span class="hs-identifier hs-type">displayInnerMatch</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679062040"><span class="annot"><a href="#local-6989586621679062040"><span class="hs-identifier hs-type">e</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Exception</span></span><span> </span><span class="annot"><a href="#local-6989586621679062040"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679062040"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-73"></span><span id="displayInnerMatch"><span class="annot"><span class="annottext">displayInnerMatch :: forall e. Exception e =&gt; [ExceptionProxy] -&gt; e -&gt; String
+</span><a href="Control.Exception.Annotation.Utils.html#displayInnerMatch"><span class="hs-identifier hs-var hs-var">displayInnerMatch</span></a></span></span><span> </span><span id="local-6989586621679062090"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062090"><span class="hs-identifier hs-var">proxies</span></a></span></span><span> </span><span id="local-6989586621679062091"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062091"><span class="hs-identifier hs-var">ex</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-74"></span><span>  </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">(ExceptionProxy -&gt; Maybe String) -&gt; [ExceptionProxy] -&gt; [String]
+forall a b. (a -&gt; Maybe b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">Maybe.mapMaybe</span></span><span> </span><span class="annot"><span class="annottext">ExceptionProxy -&gt; Maybe String
+</span><a href="#local-6989586621679062093"><span class="hs-identifier hs-var">toMatchedDesc</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062090"><span class="hs-identifier hs-var">proxies</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-75"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679062094"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679062094"><span class="hs-identifier hs-var">innerExDesc</span></a></span></span><span> </span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679062094"><span class="hs-identifier hs-var">innerExDesc</span></a></span><span>
+</span><span id="line-76"></span><span>    </span><span class="annot"><span class="annottext">[String]
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">e -&gt; String
+forall e. Exception e =&gt; e -&gt; String
+</span><span class="hs-identifier hs-var">displayException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062091"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-77"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-78"></span><span>    </span><span id="local-6989586621679062095"><span class="annot"><span class="annottext">se :: SomeException
+</span><a href="#local-6989586621679062095"><span class="hs-identifier hs-var hs-var">se</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">e -&gt; SomeException
+forall e. Exception e =&gt; e -&gt; SomeException
+</span><span class="hs-identifier hs-var">toException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062091"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-79"></span><span>
+</span><span id="line-80"></span><span>    </span><span class="annot"><a href="#local-6989586621679062093"><span class="hs-identifier hs-type">toMatchedDesc</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span>
+</span><span id="line-81"></span><span>    </span><span id="local-6989586621679062093"><span class="annot"><span class="annottext">toMatchedDesc :: ExceptionProxy -&gt; Maybe String
+</span><a href="#local-6989586621679062093"><span class="hs-identifier hs-var hs-var">toMatchedDesc</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#MkExceptionProxy"><span class="hs-identifier hs-type">MkExceptionProxy</span></a></span><span> </span><span class="hs-glyph">@</span><span id="local-6989586621679062099"><span class="annot"><a href="#local-6989586621679062099"><span class="hs-identifier hs-type hs-type">ex</span></a></span></span><span> </span><span class="annot"><span class="annottext">Proxy e
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">forall e. Exception e =&gt; SomeException -&gt; Maybe e
+</span><span class="hs-identifier hs-var">fromException</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><a href="#local-6989586621679062099"><span class="hs-identifier hs-type">ex</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062095"><span class="hs-identifier hs-var">se</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-82"></span><span>      </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679062100"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062100"><span class="hs-identifier hs-var">e</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; Maybe String
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Maybe String) -&gt; String -&gt; Maybe String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; String
+forall e. Exception e =&gt; e -&gt; String
+</span><span class="hs-identifier hs-var">displayException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679062100"><span class="hs-identifier hs-var">e</span></a></span><span>
+</span><span id="line-83"></span><span>      </span><span class="annot"><span class="annottext">Maybe e
+</span><span class="hs-identifier">_</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe String
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-84"></span><span>
+</span><span id="line-85"></span><span class="hs-comment">-- | 'setUncaughtExceptionHandler' with 'displayInnerMatchHandler' i.e. calls</span><span>
+</span><span id="line-86"></span><span class="hs-comment">-- 'displayException' on any uncaught exceptions, passing the result to the</span><span>
+</span><span id="line-87"></span><span class="hs-comment">-- param handler. 'ExitSuccess' is ignored.</span><span>
+</span><span id="line-88"></span><span class="hs-comment">--</span><span>
+</span><span id="line-89"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-90"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplay"><span class="hs-identifier hs-type">setUncaughtExceptionDisplay</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-91"></span><span id="setUncaughtExceptionDisplay"><span class="annot"><span class="annottext">setUncaughtExceptionDisplay :: (String -&gt; IO ()) -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplay"><span class="hs-identifier hs-var hs-var">setUncaughtExceptionDisplay</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy] -&gt; (String -&gt; IO ()) -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplayInnerMatch"><span class="hs-identifier hs-var">setUncaughtExceptionDisplayInnerMatch</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-92"></span><span class="hs-pragma">{-# INLINEABLE</span><span> </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplay"><span class="hs-pragma hs-type">setUncaughtExceptionDisplay</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span class="hs-comment">-- | Like 'setUncaughtExceptionDisplay', except we attempt to match the</span><span>
+</span><span id="line-95"></span><span class="hs-comment">-- given exception types.</span><span>
+</span><span id="line-96"></span><span class="hs-comment">--</span><span>
+</span><span id="line-97"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-98"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplayInnerMatch"><span class="hs-identifier hs-type">setUncaughtExceptionDisplayInnerMatch</span></a></span><span> </span><span class="hs-glyph">::</span><span>
+</span><span id="line-99"></span><span>  </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-100"></span><span>  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-101"></span><span>  </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-102"></span><span id="setUncaughtExceptionDisplayInnerMatch"><span class="annot"><span class="annottext">setUncaughtExceptionDisplayInnerMatch :: [ExceptionProxy] -&gt; (String -&gt; IO ()) -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplayInnerMatch"><span class="hs-identifier hs-var hs-var">setUncaughtExceptionDisplayInnerMatch</span></a></span></span><span> </span><span id="local-6989586621679062101"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062101"><span class="hs-identifier hs-var">proxies</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-103"></span><span>  </span><span class="annot"><span class="annottext">(SomeException -&gt; IO ()) -&gt; IO ()
+</span><span class="hs-identifier hs-var">setUncaughtExceptionHandler</span></span><span> </span><span class="annot"><span class="annottext">((SomeException -&gt; IO ()) -&gt; IO ())
+-&gt; ((String -&gt; IO ()) -&gt; SomeException -&gt; IO ())
+-&gt; (String -&gt; IO ())
+-&gt; IO ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy] -&gt; (String -&gt; IO ()) -&gt; SomeException -&gt; IO ()
+forall (f :: * -&gt; *).
+Applicative f =&gt;
+[ExceptionProxy] -&gt; (String -&gt; f ()) -&gt; SomeException -&gt; f ()
+</span><a href="Control.Exception.Annotation.Utils.html#displayInnerMatchHandler"><span class="hs-identifier hs-var">displayInnerMatchHandler</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062101"><span class="hs-identifier hs-var">proxies</span></a></span><span>
+</span><span id="line-104"></span><span class="hs-pragma">{-# INLINEABLE</span><span> </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setUncaughtExceptionDisplayInnerMatch"><span class="hs-pragma hs-type">setUncaughtExceptionDisplayInnerMatch</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-105"></span><span>
+</span><span id="line-106"></span><span class="hs-comment">-- | Calls 'displayInnerMatch' on the exception, passing the result to the</span><span>
+</span><span id="line-107"></span><span class="hs-comment">-- param handler. 'ExitSuccess' is ignored.</span><span>
+</span><span id="line-108"></span><span class="hs-comment">--</span><span>
+</span><span id="line-109"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-110"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInnerMatchHandler"><span class="hs-identifier hs-type">displayInnerMatchHandler</span></a></span><span> </span><span class="hs-glyph">::</span><span>
+</span><span id="line-111"></span><span>  </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679062052"><span class="annot"><a href="#local-6989586621679062052"><span class="hs-identifier hs-type">f</span></a></span></span><span class="hs-operator">.</span><span>
+</span><span id="line-112"></span><span>  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Applicative</span></span><span> </span><span class="annot"><a href="#local-6989586621679062052"><span class="hs-identifier hs-type">f</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span>
+</span><span id="line-113"></span><span>  </span><span class="annot"><span class="hs-comment">-- | Proxies to attempt to match in 'displayInnerMatch'.</span></span><span>
+</span><span id="line-114"></span><span>  </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-115"></span><span>  </span><span class="annot"><span class="hs-comment">-- | The handler.</span></span><span>
+</span><span id="line-116"></span><span>  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679062052"><span class="hs-identifier hs-type">f</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-117"></span><span>  </span><span class="annot"><span class="hs-comment">-- | The exception.</span></span><span>
+</span><span id="line-118"></span><span>  </span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-119"></span><span>  </span><span class="hs-comment">-- | The result of the handler, or @pure ()@, if we encountered</span><span>
+</span><span id="line-120"></span><span>  </span><span class="hs-comment">-- 'ExitSuccess'.</span><span>
+</span><span id="line-121"></span><span>  </span><span class="annot"><a href="#local-6989586621679062052"><span class="hs-identifier hs-type">f</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-122"></span><span id="displayInnerMatchHandler"><span class="annot"><span class="annottext">displayInnerMatchHandler :: forall (f :: * -&gt; *).
+Applicative f =&gt;
+[ExceptionProxy] -&gt; (String -&gt; f ()) -&gt; SomeException -&gt; f ()
+</span><a href="Control.Exception.Annotation.Utils.html#displayInnerMatchHandler"><span class="hs-identifier hs-var hs-var">displayInnerMatchHandler</span></a></span></span><span>
+</span><span id="line-123"></span><span>  </span><span id="local-6989586621679062109"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062109"><span class="hs-identifier hs-var">proxies</span></a></span></span><span>
+</span><span id="line-124"></span><span>  </span><span id="local-6989586621679062110"><span class="annot"><span class="annottext">String -&gt; f ()
+</span><a href="#local-6989586621679062110"><span class="hs-identifier hs-var">handler</span></a></span></span><span>
+</span><span id="line-125"></span><span>  </span><span id="local-6989586621679062111"><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062111"><span class="hs-identifier hs-var">ex</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; Maybe ExitCode
+forall e. Exception e =&gt; SomeException -&gt; Maybe e
+</span><span class="hs-identifier hs-var">fromException</span></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062111"><span class="hs-identifier hs-var">ex</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-126"></span><span>    </span><span class="hs-comment">-- Need to handle ExitSuccess, which this does.</span><span>
+</span><span id="line-127"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="annot"><span class="annottext">ExitCode
+</span><span class="hs-identifier hs-var">ExitSuccess</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">() -&gt; f ()
+forall a. a -&gt; f a
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-128"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">ExitFailure</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; f ()
+</span><a href="#local-6989586621679062110"><span class="hs-identifier hs-var">handler</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; f ()) -&gt; String -&gt; f ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy] -&gt; SomeException -&gt; String
+forall e. Exception e =&gt; [ExceptionProxy] -&gt; e -&gt; String
+</span><a href="Control.Exception.Annotation.Utils.html#displayInnerMatch"><span class="hs-identifier hs-var">displayInnerMatch</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062109"><span class="hs-identifier hs-var">proxies</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062111"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-129"></span><span>    </span><span class="annot"><span class="annottext">Maybe ExitCode
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; f ()
+</span><a href="#local-6989586621679062110"><span class="hs-identifier hs-var">handler</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; f ()) -&gt; String -&gt; f ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy] -&gt; SomeException -&gt; String
+forall e. Exception e =&gt; [ExceptionProxy] -&gt; e -&gt; String
+</span><a href="Control.Exception.Annotation.Utils.html#displayInnerMatch"><span class="hs-identifier hs-var">displayInnerMatch</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679062109"><span class="hs-identifier hs-var">proxies</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679062111"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-130"></span><span class="hs-pragma">{-# INLINEABLE</span><span> </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#displayInnerMatchHandler"><span class="hs-pragma hs-type">displayInnerMatchHandler</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-131"></span></pre></body></html>
