@@ -139,6 +139,14 @@ catchIf ::
 catchIf p = C.catchJust (\e -> if p e then Just e else Nothing)
 {-# INLINEABLE catchIf #-}
 
+-- TODO: We might want to eventually make a tryWithContextX for the following
+-- tryX functions i.e. implement the same wrappers over base 4.21's (GHC 9.12)
+-- tryWithContext. Realistically, we need tryWithContext to be implemented
+-- in exceptions first.
+--
+-- See https://github.com/ekmett/exceptions/issues/100 for further
+-- discussion on what exactly will be implemented in exceptions.
+
 -- | Like 'C.try', except it fully evaluates the result to find impure
 -- exceptions.
 --

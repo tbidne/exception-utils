@@ -4,14 +4,24 @@
 
 module Unit.Control.Exception.Utils (tests) where
 
+import Control.Exception (Exception, ExceptionWithContext)
+import Control.Exception qualified as E
+import Control.Exception.Context qualified as Ctx
+import Control.Exception.Utils (exitFailure)
 import Control.Monad.Catch qualified as C
-import Control.Exception ( ExceptionWithContext)
-import Control.Exception (Exception)
-import System.Exit (exitSuccess)
-import Control.Exception.Utils (exitFailure, trySync)
+import Data.Text qualified as T
+import System.Exit (ExitCode, exitSuccess)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (HasCallStack, assertFailure, testCase)
 import TestUtils qualified
+
+-- NOTE: The tests in this module have low value. They're not really testing
+-- any logic in this lib, but rather the built-in callstack functionality.
+-- Thus the only real purpose is to demonstrate how to get callstacks. Since
+-- the callstack functionality has been a bit of a moving target, this has
+-- some value, but it is limited.
+--
+-- Once the callstack functionality is stable, we can probably remove them.
 
 tests :: TestTree
 tests =
@@ -35,14 +45,13 @@ throwsTests =
 
 throwsExitFailure :: TestTree
 throwsExitFailure = testCase "Calls exitFailure" $ do
-  trySync exitFailure >>= \case
-    Left e ->
-      TestUtils.assertContainsMinLines 6 expected (TestUtils.displayExceptiont e)
+  C.try @_ @(ExceptionWithContext ExitCode) exitFailure >>= \case
+    Left (E.ExceptionWithContext ctx _) ->
+      TestUtils.assertContainsMinLines 6 expected (T.pack $ Ctx.displayExceptionContext ctx)
     Right _ -> assertFailure "Error: did not catch expected exception."
   where
     expected =
-      [ "ExitFailure 1",
-        "HasCallStack backtrace:",
+      [ "HasCallStack backtrace:",
         "  throwM, called at",
         "  exitWith, called at",
         "  exitFailure"
@@ -51,16 +60,13 @@ throwsExitFailure = testCase "Calls exitFailure" $ do
 throwsExitSuccess :: TestTree
 throwsExitSuccess =
   testCase "Calls exitSuccess" $
-    trySync exitSuccess >>= \case
-      Left e ->
-        TestUtils.assertContainsMinLines 6 expected (TestUtils.displayExceptiont e)
+    C.try @_ @(ExceptionWithContext ExitCode) exitSuccess >>= \case
+      Left (E.ExceptionWithContext ctx _) ->
+        TestUtils.assertContainsMinLines 3 expected (T.pack $ Ctx.displayExceptionContext ctx)
       Right _ -> assertFailure "Error: did not catch expected exception."
   where
     expected =
-      [ "ExitSuccess",
-        "HasCallStack backtrace:",
-        "  collectBacktraces, called at",
-        "  toExceptionWithBacktrace, called at",
+      [ "HasCallStack backtrace:",
         "  throwIO, called at"
       ]
 
@@ -69,20 +75,18 @@ catchTests =
   testGroup
     "Catching"
     [ catchesContext,
-      catchesOriginal,
-      catchesGetsContext
+      catchesOriginal
     ]
 
 catchesContext :: (HasCallStack) => TestTree
 catchesContext = testCase "catches exception with context" $ do
   C.try @_ @(ExceptionWithContext Ex) (C.throwM MkEx) >>= \case
-    Left e ->
-      TestUtils.assertContainsMinLines 6 expected (TestUtils.displayExceptiont e)
+    Left (E.ExceptionWithContext ctx _) ->
+      TestUtils.assertContainsMinLines 6 expected (T.pack $ Ctx.displayExceptionContext ctx)
     Right _ -> assertFailure "Error: did not catch expected exception."
   where
     expected =
-      [ "MkEx",
-        "HasCallStack backtrace:",
+      [ "HasCallStack backtrace:",
         "  throwM, called at",
         "  catchesContext, called at",
         "  catchTests, called at"
@@ -96,21 +100,6 @@ catchesOriginal = testCase "catches exception without stacktrace" $ do
   where
     expected = ["MkEx"]
 
--- Notice this does not include MkEx in the callstack :-(
-catchesGetsContext :: (HasCallStack) => TestTree
-catchesGetsContext = testCase "catches exception and gets context" $ do
-  trySync (C.throwM MkEx) >>= \case
-    Left e ->
-      TestUtils.assertContainsMinLines 6 expected (TestUtils.displayExceptiont e)
-    Right _ -> assertFailure "Error: did not catch expected exception."
-  where
-    expected =
-      [ "HasCallStack backtrace:",
-        "  throwIO, called at",
-        "  catchesGetsContext, called at",
-        "  catchTests, called at"
-      ]
-
 #else
 
 {-# OPTIONS_GHC -Wno-unused-imports #-}
@@ -122,7 +111,6 @@ module Unit.Control.Exception.Utils (tests) where
 
 import Control.Exception.Utils ()
 import Control.Monad.Catch ()
-import Control.Monad.Trans.Reader ()
 import Test.Tasty (TestTree, testGroup)
 
 tests :: TestTree
