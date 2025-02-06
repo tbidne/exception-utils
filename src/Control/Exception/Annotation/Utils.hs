@@ -63,7 +63,7 @@ ignoreKnownCallStackHandler proxies prevHandler ex =
 --
 -- @since 0.1
 ignoreCallStackHandler :: SomeException -> IO ()
-ignoreCallStackHandler = print . displayException
+ignoreCallStackHandler = putStrLn . displayException
 
 -- | Returns true iff e matches some ExceptionProxy.
 --
