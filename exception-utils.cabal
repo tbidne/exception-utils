@@ -72,9 +72,9 @@ test-suite unit
     , base
     , exception-utils
     , exceptions
+    , silently         ^>=1.2.4
     , tasty            >=1.1.0.3 && <1.6
     , tasty-hunit      >=0.9     && <0.11
     , text             >=1.2.4.0 && <2.2
 
   hs-source-dirs: test/unit
-  ghc-options:    -threaded -with-rtsopts=-N

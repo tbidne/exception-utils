@@ -4,13 +4,17 @@
 
 module Unit.Control.Exception.Annotation.Utils (tests) where
 
-import Control.Exception (Exception)
+import Control.Exception (Exception (toException))
+import Control.Exception.Utils
+  ( TextException (MkTextException),
+  )
 import Control.Exception.Annotation.Utils
   ( ExceptionProxy (MkExceptionProxy),
   )
 import Control.Exception.Annotation.Utils qualified as AnnUtils
+import System.IO.Silently qualified as Shh
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (HasCallStack, assertBool, testCase)
+import Test.Tasty.HUnit (HasCallStack, assertBool, testCase, (@=?))
 
 tests :: TestTree
 tests =
@@ -20,7 +24,8 @@ tests =
       testMatchOne,
       testMatchMulti,
       testMatchLater,
-      testNoMatchMulti
+      testNoMatchMulti,
+      testRespectsFormatting
     ]
 
 testNoMatchNone :: (HasCallStack) => TestTree
@@ -51,6 +56,13 @@ testNoMatchMulti = testCase "Should not match multiple wrong types" $ do
   where
     matches = [MkExceptionProxy @ExB, MkExceptionProxy @ExC]
 
+testRespectsFormatting :: TestTree
+testRespectsFormatting = testCase "Should respect formatting" $ do
+  s <- Shh.capture_ $ AnnUtils.ignoreCallStackHandler ex
+  "Line one\nLine two\n\n" @=? s
+  where
+    ex = toException $ MkTextException "Line one\nLine two"
+
 data ExA = MkExA
   deriving stock (Eq, Show)
   deriving anyclass (Exception)
@@ -65,8 +77,11 @@ data ExC = MkExC
 
 #else
 
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 module Unit.Control.Exception.Annotation.Utils (tests) where
 
+import System.IO.Silently qualified as Shh
 import Test.Tasty (TestTree, testGroup)
 
 tests :: TestTree
