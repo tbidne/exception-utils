@@ -15,7 +15,7 @@
         { pkgs, ... }:
         let
           hlib = pkgs.haskell.lib;
-          ghc-version = "ghc982";
+          ghc-version = "ghc9101";
           compiler = pkgs.haskell.packages."${ghc-version}";
           compilerPkgs = {
             inherit compiler pkgs;
@@ -27,6 +27,13 @@
               inherit compiler pkgs returnShellEnv;
               name = "exception-utils";
               root = ./.;
+
+              # Remove once hlint is working again.
+              devTools = [
+                (hlib.dontCheck compiler.cabal-fmt)
+                (hlib.dontCheck compiler.haskell-language-server)
+                pkgs.nixfmt-rfc-style
+              ];
             };
         in
         {
@@ -35,8 +42,8 @@
 
           apps = {
             format = nix-hs-utils.format compilerPkgs;
-            lint = nix-hs-utils.lint compilerPkgs;
-            lintRefactor = nix-hs-utils.lintRefactor compilerPkgs;
+            #lint = nix-hs-utils.lint compilerPkgs;
+            #lintRefactor = nix-hs-utils.lintRefactor compilerPkgs;
           };
         };
       systems = [
