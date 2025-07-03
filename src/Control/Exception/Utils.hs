@@ -17,6 +17,7 @@ module Control.Exception.Utils
     catchDeepSync,
     catchSync,
     catchIf,
+    catchesSync,
     handleDeep,
     handleDeepSync,
     handleSync,
@@ -35,6 +36,7 @@ module Control.Exception.Utils
     exitWith,
 
     -- * Misc
+    mkHandlerSync,
     isSyncException,
     isAsyncException,
   )
@@ -47,9 +49,14 @@ import Control.Exception
     SomeException,
   )
 import Control.Exception qualified as E
-import Control.Monad.Catch (MonadCatch, MonadThrow (throwM))
+import Control.Monad.Catch
+  ( Handler (Handler),
+    MonadCatch,
+    MonadThrow (throwM),
+  )
 import Control.Monad.Catch qualified as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Foldable qualified as F
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.IO.Exception (IOErrorType (InvalidArgument), IOException (IOError))
@@ -116,6 +123,8 @@ catchDeepSync action = catchSync (evaluateDeep =<< action)
 {-# INLINEABLE catchDeepSync #-}
 
 -- | 'C.catch' specialized to catch all synchronous 'SomeException's.
+--
+-- @since 0.1
 catchSync ::
   forall m a.
   (HasCallStack, MonadCatch m) =>
@@ -127,6 +136,8 @@ catchSync = catchIf @_ @SomeException isSyncException
 {-# INLINEABLE catchSync #-}
 
 -- | Catch an exception only if it satisfies a specific predicate.
+--
+-- @since 0.1
 catchIf ::
   forall m e a.
   (Exception e, HasCallStack, MonadCatch m) =>
@@ -138,6 +149,43 @@ catchIf ::
   m a
 catchIf p = C.catchJust (\e -> if p e then Just e else Nothing)
 {-# INLINEABLE catchIf #-}
+
+-- | Like 'C.catches', except it includes a handler for 'SomeException' that
+-- does not catch async exceptions.
+--
+-- @since 0.1
+catchesSync ::
+  forall m f a.
+  ( Foldable f,
+    HasCallStack,
+    MonadCatch m
+  ) =>
+  -- | Action.
+  m a ->
+  -- | Handler for synchronous 'SomeException', to be tried last.
+  (SomeException -> m a) ->
+  -- | Other handlers.
+  f (Handler m a) ->
+  m a
+catchesSync m onSync hs = C.catches m hs'
+  where
+    -- This needs to be last, otherwise it would override all other handlers.
+    hs' = F.toList hs ++ [mkHandlerSync onSync]
+
+-- | Creates a handler for synchronous exceptions.
+--
+-- @since 0.1
+mkHandlerSync ::
+  forall m a.
+  ( HasCallStack,
+    MonadThrow m
+  ) =>
+  (SomeException -> m a) ->
+  Handler m a
+mkHandlerSync onEx = Handler $ \ex ->
+  if isSyncException ex
+    then onEx ex
+    else throwM ex
 
 -- TODO: We might want to eventually make a tryWithContextX for the following
 -- tryX functions i.e. implement the same wrappers over base 4.21's (GHC 9.12)
@@ -180,6 +228,8 @@ tryDeepSync action = trySync (evaluateDeep =<< action)
 {-# INLINEABLE tryDeepSync #-}
 
 -- | 'C.try' specialized to catch all synchronous 'SomeException's.
+--
+-- @since 0.1
 trySync ::
   forall m a.
   (HasCallStack, MonadCatch m) =>
@@ -189,6 +239,8 @@ trySync = tryIf @_ @SomeException isSyncException
 {-# INLINEABLE trySync #-}
 
 -- | Catch an exception only if it satisfies a specific predicate.
+--
+-- @since 0.1
 tryIf ::
   forall m e a.
   (Exception e, HasCallStack, MonadCatch m) =>

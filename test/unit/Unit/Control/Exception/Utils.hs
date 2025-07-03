@@ -4,31 +4,39 @@
 
 module Unit.Control.Exception.Utils (tests) where
 
-import Control.Exception (Exception, ExceptionWithContext)
+import Control.Exception
+  ( AsyncException (ThreadKilled),
+    Exception,
+    ExceptionWithContext,
+    SomeException
+  )
 import Control.Exception qualified as E
 import Control.Exception.Context qualified as Ctx
 import Control.Exception.Utils (exitFailure)
+import Control.Exception.Utils qualified as Utils
+import Control.Monad.Catch (Handler(Handler))
 import Control.Monad.Catch qualified as C
+import Data.Functor (($>))
 import Data.Text qualified as T
 import System.Exit (ExitCode, exitSuccess)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (HasCallStack, assertFailure, testCase)
+import Test.Tasty.HUnit (HasCallStack, assertFailure, testCase, (@=?))
 import TestUtils qualified
 
--- NOTE: The tests in this module have low value. They're not really testing
--- any logic in this lib, but rather the built-in callstack functionality.
--- Thus the only real purpose is to demonstrate how to get callstacks. Since
--- the callstack functionality has been a bit of a moving target, this has
--- some value, but it is limited.
+-- NOTE: Most of the tests in this module merely test the built-in callstack
+-- functionality i.e. have little value. Their only real purpose is to
+-- demonstrate how to get callstacks. Since the callstack functionality has
+-- been a bit of a moving target, this has some value, but it is limited.
 --
--- Once the callstack functionality is stable, we can probably remove them.
+-- Once the callstack functionality is stable, consider removing them.
 
 tests :: TestTree
 tests =
   testGroup
     "Control.Exception.Utils"
     [ throwsTests,
-      catchTests
+      catchTests,
+      handlerTests
     ]
 
 data Ex = MkEx
@@ -99,6 +107,67 @@ catchesOriginal = testCase "catches exception without stacktrace" $ do
     Right _ -> assertFailure "Error: did not catch expected exception."
   where
     expected = ["MkEx"]
+
+handlerTests :: TestTree
+handlerTests =
+  testGroup
+    "Handler"
+    [ testCatchesSpecific,
+      testCatchesSync,
+      testCatchesAsync
+    ]
+
+data Ex2 = MkEx2
+  deriving stock (Eq, Show)
+  deriving anyclass (Exception)
+
+-- Tests that exceptions are caught by the expected handler. Note that we
+-- need to differential the handler, hence each handler:
+--
+--   - Specific Handler
+--   - SomeException
+--   - Fallback (catches uncaught exceptions so they don't kill the test)
+--
+-- has a unique string prefix.
+
+testCatchesSpecific :: TestTree
+testCatchesSpecific = testCase desc $ do
+  result <- Utils.catchesSync (C.throwM MkEx $> "not caught") onSync handlers
+  "handlers: MkEx" @=? result
+  where
+    desc = "catchesSync catches specific exception"
+
+testCatchesSync :: TestTree
+testCatchesSync = testCase desc $ do
+  result <- Utils.catchesSync (C.throwM MkEx2 $> "not caught") onSync handlers
+  "onSync: MkEx2" @=? result
+  where
+    desc = "catchesSync catches specific exception"
+
+testCatchesAsync :: TestTree
+testCatchesAsync = testCase desc $ do
+  result <- (Utils.catchesSync (C.throwM ThreadKilled $> "not caught") onSync handlers)
+    -- This catch proves that catchesSync did not catch the async exception,
+    -- as desired. To actually teset this, the handler here needs to be
+    -- different 
+    `C.catch` fallback
+  "fallback: thread killed" @=? result
+  where
+    desc = "catchesSync does not catch async exception"
+
+    fallback :: SomeException -> IO String
+    fallback = pure . ("fallback: " <> ) . show
+
+-- NOTE: Show over displayException so we do not get callstacks.
+-- (GHC 9.10).
+
+onSync :: SomeException -> IO String
+onSync = pure . ("onSync: " <>) . show
+
+handlers :: [Handler IO String]
+handlers =
+  [ Handler $ \(ex :: Ex) -> pure $ "handlers: " <> show ex
+  ]
 
 #else
 
