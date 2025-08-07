@@ -1,0 +1,128 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE AllowAmbiguousTypes #-}</span><span>
+</span><span id="line-2"></span><span class="hs-pragma">{-# OPTIONS_GHC -Wno-redundant-constraints #-}</span><span>
+</span><span id="line-3"></span><span>
+</span><span id="line-4"></span><span class="hs-comment">-- | Provides utilities for working with GHC's native Exception annotations.</span><span>
+</span><span id="line-5"></span><span class="hs-comment">--</span><span>
+</span><span id="line-6"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-7"></span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html"><span class="hs-identifier">Control.Exception.Annotation.Utils</span></a></span><span>
+</span><span id="line-8"></span><span>  </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-comment">-- * Exception matching</span></span><span>
+</span><span id="line-9"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier">ExceptionProxy</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-10"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#matchesException"><span class="hs-identifier">matchesException</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-11"></span><span>
+</span><span id="line-12"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Ignoring known callstacks</span></span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setIgnoreKnownCallStackHandler"><span class="hs-identifier">setIgnoreKnownCallStackHandler</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ignoreKnownCallStackHandler"><span class="hs-identifier">ignoreKnownCallStackHandler</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ignoreCallStackHandler"><span class="hs-identifier">ignoreCallStackHandler</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>  </span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">where</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Monad.Catch</span></span><span>
+</span><span id="line-20"></span><span>  </span><span class="hs-special">(</span><span> </span><span class="annot"><span class="hs-identifier">Exception</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">displayException</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">fromException</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">toException</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><span class="hs-identifier">SomeException</span></span><span class="hs-special">,</span><span>
+</span><span id="line-22"></span><span>  </span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">L</span></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Maybe</span></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">GHC.Conc</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">getUncaughtExceptionHandler</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">setUncaughtExceptionHandler</span></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span>
+</span><span id="line-27"></span><span class="hs-comment">-- | Proxy for exception types. Used for matching multiple exception types.</span><span>
+</span><span id="line-28"></span><span class="hs-comment">--</span><span>
+</span><span id="line-29"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-30"></span><span class="hs-keyword">data</span><span> </span><span id="ExceptionProxy"><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-var">ExceptionProxy</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679060632"><span class="annot"><a href="#local-6989586621679060632"><span class="hs-identifier hs-type">e</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Exception</span></span><span> </span><span class="annot"><a href="#local-6989586621679060632"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span id="MkExceptionProxy"><span class="annot"><a href="Control.Exception.Annotation.Utils.html#MkExceptionProxy"><span class="hs-identifier hs-var">MkExceptionProxy</span></a></span></span><span>
+</span><span id="line-31"></span><span>
+</span><span id="line-32"></span><span class="hs-comment">-- | Augments the current global exception handler with the logic to ignore</span><span>
+</span><span id="line-33"></span><span class="hs-comment">-- callstacks on known exceptions, per the parameter proxy list. In other</span><span>
+</span><span id="line-34"></span><span class="hs-comment">-- words, merely calls 'displayException' on known exceptions. Note that</span><span>
+</span><span id="line-35"></span><span class="hs-comment">-- on older GHCs (&lt; 9.12), this may still print a callstack as the callstack</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- is part of the 'SomeException' type, prior to the exceptions redesign.</span><span>
+</span><span id="line-37"></span><span class="hs-comment">--</span><span>
+</span><span id="line-38"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-39"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#setIgnoreKnownCallStackHandler"><span class="hs-identifier hs-type">setIgnoreKnownCallStackHandler</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-40"></span><span id="setIgnoreKnownCallStackHandler"><span class="annot"><span class="annottext">setIgnoreKnownCallStackHandler :: [ExceptionProxy] -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#setIgnoreKnownCallStackHandler"><span class="hs-identifier hs-var hs-var">setIgnoreKnownCallStackHandler</span></a></span></span><span> </span><span id="local-6989586621679060634"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060634"><span class="hs-identifier hs-var">proxies</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-41"></span><span>  </span><span class="annot"><span class="annottext">IO (SomeException -&gt; IO ())
+</span><span class="hs-identifier hs-var">getUncaughtExceptionHandler</span></span><span>
+</span><span id="line-42"></span><span>    </span><span class="annot"><span class="annottext">IO (SomeException -&gt; IO ())
+-&gt; ((SomeException -&gt; IO ()) -&gt; IO ()) -&gt; IO ()
+forall a b. IO a -&gt; (a -&gt; IO b) -&gt; IO b
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">(SomeException -&gt; IO ()) -&gt; IO ()
+</span><span class="hs-identifier hs-var">setUncaughtExceptionHandler</span></span><span> </span><span class="annot"><span class="annottext">((SomeException -&gt; IO ()) -&gt; IO ())
+-&gt; ((SomeException -&gt; IO ()) -&gt; SomeException -&gt; IO ())
+-&gt; (SomeException -&gt; IO ())
+-&gt; IO ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+-&gt; (SomeException -&gt; IO ()) -&gt; SomeException -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#ignoreKnownCallStackHandler"><span class="hs-identifier hs-var">ignoreKnownCallStackHandler</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060634"><span class="hs-identifier hs-var">proxies</span></a></span><span>
+</span><span id="line-43"></span><span>
+</span><span id="line-44"></span><span class="hs-comment">-- | Augments the parameter handler with logic to avoid callstacks when</span><span>
+</span><span id="line-45"></span><span class="hs-comment">-- the exception matches one of the proxies.</span><span>
+</span><span id="line-46"></span><span class="hs-comment">--</span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-48"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ignoreKnownCallStackHandler"><span class="hs-identifier hs-type">ignoreKnownCallStackHandler</span></a></span><span> </span><span class="hs-glyph">::</span><span>
+</span><span id="line-49"></span><span>  </span><span class="annot"><span class="hs-comment">-- | Exception proxies to match.</span></span><span>
+</span><span id="line-50"></span><span>  </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-51"></span><span>  </span><span class="annot"><span class="hs-comment">-- | Previous handler, to use when we do not have a match.</span></span><span>
+</span><span id="line-52"></span><span>  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-53"></span><span>  </span><span class="annot"><span class="hs-comment">-- | Augmented handler.</span></span><span>
+</span><span id="line-54"></span><span>  </span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-55"></span><span>  </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-56"></span><span id="ignoreKnownCallStackHandler"><span class="annot"><span class="annottext">ignoreKnownCallStackHandler :: [ExceptionProxy]
+-&gt; (SomeException -&gt; IO ()) -&gt; SomeException -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#ignoreKnownCallStackHandler"><span class="hs-identifier hs-var hs-var">ignoreKnownCallStackHandler</span></a></span></span><span> </span><span id="local-6989586621679060636"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060636"><span class="hs-identifier hs-var">proxies</span></a></span></span><span> </span><span id="local-6989586621679060637"><span class="annot"><span class="annottext">SomeException -&gt; IO ()
+</span><a href="#local-6989586621679060637"><span class="hs-identifier hs-var">prevHandler</span></a></span></span><span> </span><span id="local-6989586621679060638"><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679060638"><span class="hs-identifier hs-var">ex</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-57"></span><span>  </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy] -&gt; SomeException -&gt; Bool
+forall e. Exception e =&gt; [ExceptionProxy] -&gt; e -&gt; Bool
+</span><a href="Control.Exception.Annotation.Utils.html#matchesException"><span class="hs-identifier hs-var">matchesException</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060636"><span class="hs-identifier hs-var">proxies</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679060638"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-58"></span><span>    </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#ignoreCallStackHandler"><span class="hs-identifier hs-var">ignoreCallStackHandler</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679060638"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-59"></span><span>    </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; IO ()
+</span><a href="#local-6989586621679060637"><span class="hs-identifier hs-var">prevHandler</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679060638"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-60"></span><span>
+</span><span id="line-61"></span><span class="hs-comment">-- | Exception handler that merely calls 'displayException', thereby avoiding</span><span>
+</span><span id="line-62"></span><span class="hs-comment">-- callstacks for GHC &gt;= 9.12.</span><span>
+</span><span id="line-63"></span><span class="hs-comment">--</span><span>
+</span><span id="line-64"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-65"></span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ignoreCallStackHandler"><span class="hs-identifier hs-type">ignoreCallStackHandler</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">SomeException</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><span id="line-66"></span><span id="ignoreCallStackHandler"><span class="annot"><span class="annottext">ignoreCallStackHandler :: SomeException -&gt; IO ()
+</span><a href="Control.Exception.Annotation.Utils.html#ignoreCallStackHandler"><span class="hs-identifier hs-var hs-var">ignoreCallStackHandler</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; IO ()
+</span><span class="hs-identifier hs-var">putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; IO ())
+-&gt; (SomeException -&gt; String) -&gt; SomeException -&gt; IO ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">SomeException -&gt; String
+forall e. Exception e =&gt; e -&gt; String
+</span><span class="hs-identifier hs-var">displayException</span></span><span>
+</span><span id="line-67"></span><span>
+</span><span id="line-68"></span><span class="hs-comment">-- | Returns true iff e matches some ExceptionProxy.</span><span>
+</span><span id="line-69"></span><span class="hs-comment">--</span><span>
+</span><span id="line-70"></span><span class="hs-comment">-- @since 0.1</span><span>
+</span><span id="line-71"></span><span id="local-6989586621679060611"><span class="annot"><a href="Control.Exception.Annotation.Utils.html#matchesException"><span class="hs-identifier hs-type">matchesException</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Exception</span></span><span> </span><span class="annot"><a href="#local-6989586621679060611"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#ExceptionProxy"><span class="hs-identifier hs-type">ExceptionProxy</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679060611"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-72"></span><span id="matchesException"><span class="annot"><span class="annottext">matchesException :: forall e. Exception e =&gt; [ExceptionProxy] -&gt; e -&gt; Bool
+</span><a href="Control.Exception.Annotation.Utils.html#matchesException"><span class="hs-identifier hs-var hs-var">matchesException</span></a></span></span><span> </span><span id="local-6989586621679060644"><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060644"><span class="hs-identifier hs-var">proxies</span></a></span></span><span> </span><span id="local-6989586621679060645"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679060645"><span class="hs-identifier hs-var">ex</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(ExceptionProxy -&gt; Bool) -&gt; [ExceptionProxy] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">L.any</span></span><span> </span><span class="annot"><span class="annottext">ExceptionProxy -&gt; Bool
+</span><a href="#local-6989586621679060647"><span class="hs-identifier hs-var">isMatch</span></a></span><span> </span><span class="annot"><span class="annottext">[ExceptionProxy]
+</span><a href="#local-6989586621679060644"><span class="hs-identifier hs-var">proxies</span></a></span><span>
+</span><span id="line-73"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-74"></span><span>    </span><span id="local-6989586621679060648"><span class="annot"><span class="annottext">se :: SomeException
+</span><a href="#local-6989586621679060648"><span class="hs-identifier hs-var hs-var">se</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">e -&gt; SomeException
+forall e. Exception e =&gt; e -&gt; SomeException
+</span><span class="hs-identifier hs-var">toException</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679060645"><span class="hs-identifier hs-var">ex</span></a></span><span>
+</span><span id="line-75"></span><span>    </span><span id="local-6989586621679060647"><span class="annot"><span class="annottext">isMatch :: ExceptionProxy -&gt; Bool
+</span><a href="#local-6989586621679060647"><span class="hs-identifier hs-var hs-var">isMatch</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Control.Exception.Annotation.Utils.html#MkExceptionProxy"><span class="hs-identifier hs-type">MkExceptionProxy</span></a></span><span> </span><span class="hs-glyph">@</span><span id="local-6989586621679060651"><span class="annot"><a href="#local-6989586621679060651"><span class="hs-identifier hs-type hs-type">ex</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe e -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">Maybe.isJust</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">forall e. Exception e =&gt; SomeException -&gt; Maybe e
+</span><span class="hs-identifier hs-var">fromException</span></span><span> </span><span class="hs-glyph">@</span><span class="annot"><a href="#local-6989586621679060651"><span class="hs-identifier hs-type">ex</span></a></span><span> </span><span class="annot"><span class="annottext">SomeException
+</span><a href="#local-6989586621679060648"><span class="hs-identifier hs-var">se</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-76"></span></pre></body></html>

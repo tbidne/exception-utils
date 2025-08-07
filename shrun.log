@@ -1,0 +1,20 @@
+[2025-08-07 22:43:42][Command][haddock_push] Starting...
+[2025-08-07 22:43:42][Command][haddock_push] Your branch is up to date with 'origin/main'.
+[2025-08-07 22:43:42][Command][haddock_push] Already on 'main'
+[2025-08-07 22:43:42][Command][haddock_push] Deleted branch gh-pages (was 40aad24).
+[2025-08-07 22:43:42][Command][haddock_push] Switched to a new branch 'gh-pages'
+[2025-08-07 22:43:42][Command][haddock_push] Configuration is affected by the following files:
+[2025-08-07 22:43:42][Command][haddock_push] - cabal.project
+[2025-08-07 22:43:43][Command][haddock_push] Build profile: -w ghc-9.10.1 -O1
+[2025-08-07 22:43:43][Command][haddock_push] In order, the following will be built (use -v for more details):
+[2025-08-07 22:43:43][Command][haddock_push]  - exception-utils-0.1 (lib) (configuration changed)
+[2025-08-07 22:43:43][Command][haddock_push] Configuring library for exception-utils-0.1...
+[2025-08-07 22:43:44][Command][haddock_push] Preprocessing library for exception-utils-0.1...
+[2025-08-07 22:43:44][Command][haddock_push] Running Haddock on library for exception-utils-0.1...
+[2025-08-07 22:43:45][Command][haddock_push] [1 of 2] Compiling Control.Exception.Annotation.Utils ( src/Control/Exception/Annotation/Utils.hs, nothing ) [Flags changed]
+[2025-08-07 22:43:45][Command][haddock_push] [2 of 2] Compiling Control.Exception.Utils ( src/Control/Exception/Utils.hs, nothing ) [Source file changed]
+[2025-08-07 22:44:00][Command][haddock_push] Haddock coverage:
+[2025-08-07 22:44:00][Command][haddock_push]  100% (  8 /  8) in 'Control.Exception.Annotation.Utils'
+[2025-08-07 22:44:00][Command][haddock_push]  100% ( 31 / 31) in 'Control.Exception.Utils'
+[2025-08-07 22:44:00][Command][haddock_push] Documentation created:
+[2025-08-07 22:44:00][Command][haddock_push] /home/tommy/Dev/tommy/github/exception-utils/./dist-newstyle/build/x86_64-linux/ghc-9.10.1/exception-utils-0.1/doc/html/exception-utils
