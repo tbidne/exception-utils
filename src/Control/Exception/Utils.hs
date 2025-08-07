@@ -29,6 +29,7 @@ module Control.Exception.Utils
 
     -- * Cleanup
     onSyncException,
+    onAsyncException,
 
     -- * Exiting
     exitFailure,
@@ -57,6 +58,7 @@ import Control.Monad.Catch
 import Control.Monad.Catch qualified as C
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as F
+import Data.Functor (void)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.IO.Exception (IOErrorType (InvalidArgument), IOException (IOError))
@@ -320,6 +322,29 @@ onSyncException ::
 onSyncException action handler =
   withFrozenCallStack catchSync action (\e -> handler >> throwM e)
 {-# INLINEABLE onSyncException #-}
+
+-- | Like 'C.onException', except it _only_ catches asynchronous exceptions
+-- before rethrowing. Note that the handler swallows _all_ exceptions, since
+-- we want the original to be rethrown.
+--
+-- @since 0.1
+onAsyncException ::
+  forall m a b.
+  (HasCallStack, MonadCatch m) =>
+  -- | Action to run.
+  m a ->
+  -- | Exception handler.
+  m b ->
+  m a
+onAsyncException action handler =
+  withFrozenCallStack catchAsync action $ \e -> do
+    -- We want to rethrow the original exception, hence surrounding the
+    -- handler in a try that catches _all_ exceptions.
+    void $ C.try @_ @SomeException handler
+    throwM e
+  where
+    catchAsync = catchIf @_ @SomeException isAsyncException
+{-# INLINEABLE onAsyncException #-}
 
 -- | The computation 'exitFailure' is equivalent to
 -- 'exitWith' @(@'ExitFailure' /exitfail/@)@,
