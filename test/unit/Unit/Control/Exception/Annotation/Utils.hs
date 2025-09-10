@@ -4,7 +4,7 @@
 
 module Unit.Control.Exception.Annotation.Utils (tests) where
 
-import Control.Exception (Exception)
+import Control.Exception (AsyncException (ThreadKilled), Exception)
 import Control.Exception.Annotation.Utils
   ( ExceptionProxy (MkExceptionProxy),
   )
@@ -18,6 +18,7 @@ tests =
     "Control.Exception.Annotation.Utils"
     [ testNoMatchNone,
       testMatchOne,
+      testMatchAsync,
       testMatchMulti,
       testMatchLater,
       testNoMatchMulti
@@ -32,6 +33,12 @@ testMatchOne = testCase "Should match one" $ do
   assertBool "Expected True" (AnnUtils.matchesException matches MkExA)
   where
     matches = [MkExceptionProxy @ExA]
+
+testMatchAsync :: (HasCallStack) => TestTree
+testMatchAsync = testCase "Should match async" $ do
+  assertBool "Expected True" (AnnUtils.matchesException matches ThreadKilled)
+  where
+    matches = [MkExceptionProxy @AsyncException]
 
 testMatchMulti :: TestTree
 testMatchMulti = testCase "Should match multiple" $ do
