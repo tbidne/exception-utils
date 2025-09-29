@@ -7,8 +7,8 @@
 module Control.Exception.Utils
   ( -- * Throwing
 
-    -- ** Text exception
-    TextException (..),
+    -- ** String exception
+    StringException (..),
     throwText,
     throwString,
 
@@ -65,27 +65,27 @@ import GHC.IO.Exception (IOErrorType (InvalidArgument), IOException (IOError))
 import GHC.Stack (HasCallStack, withFrozenCallStack)
 import System.Exit (ExitCode (ExitFailure, ExitSuccess))
 
--- | Exception that contains a text description.
+-- | Exception that contains a string description.
 --
 -- @since 0.1
-newtype TextException = MkTextException Text
+newtype StringException = MkStringException String
   deriving stock (Eq, Show)
 
-instance Exception TextException where
-  displayException (MkTextException t) = T.unpack t
+instance Exception StringException where
+  displayException (MkStringException t) = t
 
 -- | Throws an exception with the 'Text' description.
 --
 -- @since 0.1
 throwText :: forall m a. (HasCallStack, MonadThrow m) => Text -> m a
-throwText = throwM . MkTextException
+throwText = throwString . T.unpack
 {-# INLINEABLE throwText #-}
 
 -- | Throws an exception with the 'String' description.
 --
 -- @since 0.1
 throwString :: forall m a. (HasCallStack, MonadThrow m) => String -> m a
-throwString = throwText . T.pack
+throwString = throwM . MkStringException
 {-# INLINEABLE throwString #-}
 
 -- | Like 'C.catch', except it fully evaluates the result to find impure
