@@ -12,13 +12,12 @@ import Control.Exception
   )
 import Control.Exception qualified as E
 import Control.Exception.Context qualified as Ctx
-import Control.Exception.Utils (exitFailure)
 import Control.Exception.Utils qualified as Utils
 import Control.Monad.Catch (Handler(Handler))
 import Control.Monad.Catch qualified as C
 import Data.Functor (($>))
 import Data.Text qualified as T
-import System.Exit (ExitCode, exitSuccess)
+import System.Exit (ExitCode)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (HasCallStack, assertFailure, testCase, (@=?))
 import TestUtils qualified
@@ -53,7 +52,7 @@ throwsTests =
 
 throwsExitFailure :: TestTree
 throwsExitFailure = testCase "Calls exitFailure" $ do
-  C.try @_ @(ExceptionWithContext ExitCode) exitFailure >>= \case
+  C.try @_ @(ExceptionWithContext ExitCode) Utils.exitFailure >>= \case
     Left (E.ExceptionWithContext ctx _) ->
       TestUtils.assertContainsMinLines 6 expected (T.pack $ Ctx.displayExceptionContext ctx)
     Right _ -> assertFailure "Error: did not catch expected exception."
@@ -68,14 +67,16 @@ throwsExitFailure = testCase "Calls exitFailure" $ do
 throwsExitSuccess :: TestTree
 throwsExitSuccess =
   testCase "Calls exitSuccess" $
-    C.try @_ @(ExceptionWithContext ExitCode) exitSuccess >>= \case
+    C.try @_ @(ExceptionWithContext ExitCode) Utils.exitSuccess >>= \case
       Left (E.ExceptionWithContext ctx _) ->
-        TestUtils.assertContainsMinLines 3 expected (T.pack $ Ctx.displayExceptionContext ctx)
+        TestUtils.assertContainsMinLines 6 expected (T.pack $ Ctx.displayExceptionContext ctx)
       Right _ -> assertFailure "Error: did not catch expected exception."
   where
     expected =
       [ "HasCallStack backtrace:",
-        "  throwIO, called at"
+        "  throwIO, called at",
+        "  exitWith, called at",
+        "  exitSuccess"
       ]
 
 catchTests :: (HasCallStack) => TestTree
