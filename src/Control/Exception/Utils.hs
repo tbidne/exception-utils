@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 -- | This is essentially an addition to the @exceptions@ API. Note we do
--- __not__ export that API. This is merely some useful additional utilities.
+-- __not__ export that API, other than a few exceptions, for convenience.
+-- This is merely some useful additional utilities.
 --
 -- @since 0.1
 module Control.Exception.Utils
@@ -40,6 +41,12 @@ module Control.Exception.Utils
     mkHandlerSync,
     isSyncException,
     isAsyncException,
+
+    -- * Re-exports
+    MonadThrow (throwM),
+    MonadCatch (catch),
+    MonadMask,
+    C.bracket,
   )
 where
 
@@ -52,7 +59,8 @@ import Control.Exception
 import Control.Exception qualified as E
 import Control.Monad.Catch
   ( Handler (Handler),
-    MonadCatch,
+    MonadCatch (catch),
+    MonadMask,
     MonadThrow (throwM),
   )
 import Control.Monad.Catch qualified as C
